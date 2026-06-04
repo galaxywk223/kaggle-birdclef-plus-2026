@@ -1,111 +1,134 @@
 # Day03 BirdCLEF Plus 2026
 
-面向 BirdCLEF+ 2026 的声学生物识别项目。项目目标是建立可复现的本地训练工程，并生成可在 Kaggle CPU Notebook 中运行的首版有效提交文件。
+BirdCLEF Plus 2026 is a Kaggle bioacoustic multilabel recognition project. The repository packages a reproducible local training workflow, a CPU-compatible Kaggle inference notebook, and regression tests for the core data and submission logic.
 
-## 项目内容
+The project keeps competition data, model weights, generated submissions, downloaded public kernels, and local run outputs outside Git. The tracked surface is intended for public review and portfolio presentation.
 
-- `src/` 下的音频读取、特征生成、训练、推理和 Notebook 生成流程
-- `tests/` 下针对数据接口、音频裁剪、指标和提交文件的回归测试
-- `environment.yml` 与 `requirements.txt` 两套环境定义
-- `notebooks/` 下由脚本生成的 Kaggle 提交 Notebook
+## Project Structure
 
-## 目录说明
+| Path | Purpose |
+| --- | --- |
+| `src/` | Audio loading, feature extraction, metadata handling, training, inference, and notebook generation modules. |
+| `tests/` | Regression tests for audio segmentation, data parsing, metric calculation, and submission formatting. |
+| `notebooks/` | Generated Kaggle CPU inference notebook. |
+| `data/raw/` | Local Kaggle competition data directory. Raw files are ignored except for the directory README. |
+| `models/` | Local model checkpoints and Kaggle Dataset upload payloads. Model artifacts are ignored. |
+| `submissions/` | Local `submission.csv` outputs. Submission files are ignored. |
+| `logs/` | Local training, inference, and automation logs. Log files are ignored. |
+| `archive/` | Historical competition-operation notes or scripts that are not part of the main reusable pipeline. |
 
-- `data/raw/`：本地 Kaggle 官方下载文件，包括 `train.csv`、`taxonomy.csv`、`sample_submission.csv`、`recording_location.txt`、`test_soundscapes/`、`train_audio/`
-- `src/`：可复用 Python 模块与命令入口
-- `tests/`：核心数据处理、指标和提交格式测试
-- `models/`：训练得到的模型权重与元数据
-- `submissions/`：本地生成的 `submission.csv`
-- `logs/`：训练与推理日志
+## Environment
 
-## 环境配置
-
-### conda
+Conda environment:
 
 ```bash
 conda env create -f environment.yml
 conda activate kaggle-birdclef-2026
 ```
 
-### pip
+Pip environment:
 
 ```bash
 python -m pip install -r requirements.txt
 ```
 
-## 数据准备
+The declared environment includes Python data tooling, PyTorch, torchaudio, timm, librosa, onnxruntime, the Kaggle API client, and pytest.
 
-Kaggle API 下载：
+## Data Preparation
+
+Kaggle API download:
 
 ```bash
 python -m src.download_data --competition birdclef-2026
 ```
 
-手动下载时，官方数据文件应解压到 `data/raw/`。目录内应至少包含 `train.csv`、`taxonomy.csv`、`sample_submission.csv`、`train_audio/`。
+Manual data preparation requires the official competition files to be extracted under `data/raw/`. The required local files are:
 
-## 常用命令
+- `train.csv`
+- `taxonomy.csv`
+- `sample_submission.csv`
+- `recording_location.txt`
+- `train_audio/`
 
-生成数据概览：
+The optional `test_soundscapes/` directory supports local inference smoke tests. Kaggle submissions use the hidden test soundscapes provided by the competition runtime.
+
+## Workflow
+
+Generate an exploratory data summary:
 
 ```bash
 python -m src.eda --data-dir data/raw
 ```
 
-运行调试训练：
+Run a small debug training job:
 
 ```bash
 python -m src.train --debug --epochs 1 --limit 256
 ```
 
-运行首版训练：
+Run the baseline training workflow:
 
 ```bash
 python -m src.train --model efficientnet_b0 --folds 5 --epochs 10
 ```
 
-生成提交文件：
+Generate a local submission file:
 
 ```bash
 python -m src.infer --checkpoint models/baseline.pt --output submissions/submission.csv
 ```
 
-生成 Kaggle CPU 提交 Notebook：
+Generate the Kaggle CPU inference notebook:
 
 ```bash
 python -m src.make_notebook --checkpoint models/baseline.pt
 ```
 
-生成权重 Dataset 元数据后，`models/` 目录可作为 Kaggle Dataset 上传。`model-dataset-metadata.json` 提供默认权重数据集描述。
+The generated notebook reads official data from `/kaggle/input/birdclef-2026`, loads weights from a separate Kaggle Dataset, and writes `/kaggle/working/submission.csv`. Network access and GPU inference are not required by the generated submission notebook.
 
-运行测试：
+## Baseline Configuration
+
+| Setting | Default |
+| --- | --- |
+| Sample rate | 32000 Hz |
+| Clip duration | 5 seconds |
+| Mel bins | 128 |
+| FFT size | 2048 |
+| Hop length | 512 |
+| Model | EfficientNet-B0 multilabel head |
+| Loss | `BCEWithLogitsLoss` |
+| Fold count | 5 |
+| Inference output | Sigmoid probabilities in `sample_submission.csv` column order |
+
+The training command writes fold checkpoints, an ensemble manifest at `models/baseline.pt`, and summary metrics at `models/baseline_metrics.json`. The `model-dataset-metadata.json` file provides a default Kaggle Dataset metadata template for model-weight uploads.
+
+## Testing
+
+Run the regression suite:
 
 ```bash
 python -m pytest
 ```
 
-## 基线约束
+The tests cover audio crop/pad behavior, metadata parsing, metric calculation, and submission shape/order guarantees.
 
-- 输入音频采样率固定为 32000 Hz。
-- 单个训练样本默认裁剪或补齐为 5 秒。
-- mel-spectrogram 默认使用 128 个 mel bins。
-- 模型首版使用 EfficientNet-B0 多标签分类头。
-- 训练损失为 `BCEWithLogitsLoss`。
-- 推理输出为 sigmoid 概率，提交列顺序以 `sample_submission.csv` 为准。
+## Git Policy
 
-## Kaggle 提交说明
+The repository intentionally excludes:
 
-Kaggle Notebook 使用 `/kaggle/input/birdclef-2026` 读取官方测试数据，模型权重通过单独 Kaggle Dataset 挂载。Notebook 不依赖联网下载，不要求 GPU 推理，最终输出 `/kaggle/working/submission.csv`。
+- Official Kaggle competition data
+- Model checkpoints and intermediate training artifacts
+- Generated submissions
+- Logs and temporary outputs
+- Downloaded or replayed public Kaggle kernels
+- Large generated binary files
 
-## Git 约定
+This policy keeps the public repository lightweight while preserving the reproducible source workflow.
 
-以下内容不纳入 Git 版本控制：
+## Chinese Documentation
 
-- 官方竞赛数据
-- 模型权重与中间训练产物
-- 日志文件
-- 本地提交文件
-- 临时 Notebook 输出
+Chinese documentation is available in [`README.zh-CN.md`](README.zh-CN.md).
 
 ## License
 
-This repository is released under the MIT License. See `LICENSE` for details.
+This repository is released under the MIT License. See [`LICENSE`](LICENSE) for details.

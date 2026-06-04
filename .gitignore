@@ -41,6 +41,7 @@ candidates/
 replays/
 public_kernels/*
 !public_kernels/README.md
+scripts/__pycache__/
 
 # Large generated files
 *.csv
