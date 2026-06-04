@@ -1,4 +1,4 @@
-# Day03 BirdCLEF Plus 2026
+# BirdCLEF Plus 2026
 
 BirdCLEF Plus 2026 is a Kaggle bioacoustic multilabel recognition project. The repository packages a reproducible local training workflow, a CPU-compatible Kaggle inference notebook, and regression tests for the core data and submission logic.
 

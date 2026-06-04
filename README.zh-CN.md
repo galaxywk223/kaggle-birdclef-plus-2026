@@ -1,4 +1,4 @@
-# Day03 BirdCLEF Plus 2026
+# BirdCLEF Plus 2026
 
 BirdCLEF Plus 2026 是面向 Kaggle BirdCLEF+ 2026 的声学生物多标签识别项目。仓库提供可复现的本地训练流程、可在 Kaggle CPU 环境运行的推理 Notebook，以及覆盖核心数据和提交逻辑的回归测试。
 
