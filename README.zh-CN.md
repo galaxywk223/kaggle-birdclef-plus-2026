@@ -1,58 +1,76 @@
 # BirdCLEF Plus 2026
 
-BirdCLEF Plus 2026 是面向 Kaggle BirdCLEF+ 2026 的声学生物多标签识别项目。仓库提供可复现的本地训练流程、可在 Kaggle CPU 环境运行的推理 Notebook，以及覆盖核心数据和提交逻辑的回归测试。
+BirdCLEF Plus 2026 是面向 Kaggle BirdCLEF+ 2026 竞赛的声学生物识别项目。系统将长时野外录音转换为多标签物种预测，并覆盖从训练代码到 Kaggle CPU 提交 Notebook 的完整链路。
 
-项目将竞赛数据、模型权重、生成提交文件、公开 Kernel 下载内容和本地运行输出排除在 Git 之外。公开仓库仅保留适合展示和复现的工程主体。
+项目聚焦真实竞赛场景：固定时间窗、mel-spectrogram 特征、多标签分类、fold checkpoint、ensemble 推理，以及提交列顺序严格对齐。
 
-## 项目结构
+## 项目亮点
 
-| 路径 | 用途 |
+- 面向 BirdCLEF+ 2026 音频分类任务的端到端 Python 管线。
+- 具备确定性 crop 和 padding 行为的 mel-spectrogram 预处理。
+- EfficientNet-B0 多标签基线模型，并提供轻量 CNN fallback。
+- Fold checkpoint 导出和 ensemble manifest 支持。
+- 生成可在 Kaggle CPU 环境离线运行的提交 Notebook。
+- 回归测试覆盖音频窗口、元数据解析、macro AUC 和提交文件形状。
+
+## 系统设计
+
+| 阶段 | 实现 |
 | --- | --- |
-| `src/` | 音频读取、特征生成、元数据处理、训练、推理和 Notebook 生成模块。 |
-| `tests/` | 音频裁剪、数据解析、指标计算和提交格式的回归测试。 |
-| `notebooks/` | 生成的 Kaggle CPU 推理 Notebook。 |
-| `data/raw/` | 本地 Kaggle 官方数据目录；原始文件不纳入 Git。 |
-| `models/` | 本地模型权重和 Kaggle Dataset 上传内容；模型产物不纳入 Git。 |
-| `submissions/` | 本地生成的 `submission.csv`；提交文件不纳入 Git。 |
-| `logs/` | 本地训练、推理和自动化日志；日志文件不纳入 Git。 |
-| `archive/` | 不属于主复现流程的历史赛务记录或脚本。 |
+| 数据读取 | 竞赛元数据、taxonomy 标签、sample submission 列和 soundscape row ID。 |
+| 音频预处理 | 32000 Hz 波形读取、五秒窗口截取和 mel-spectrogram 转换。 |
+| 模型训练 | Fold 划分、多标签目标、PyTorch dataloader、EfficientNet 风格图像分类器和 BCE loss。 |
+| 验证 | 基于标签列的 macro AUC 计算。 |
+| Checkpoint | Fold 权重、ensemble manifest、音频配置和类别顺序。 |
+| 推理 | Soundscape 分段、批量预测、sigmoid 概率和列顺序校验。 |
+| 提交打包 | 生成读取竞赛输入并写出 `submission.csv` 的 Kaggle Notebook。 |
 
-## 环境配置
+## 推理流程
 
-Conda 环境：
+推理链路面向 Kaggle CPU 运行环境设计：
+
+1. 读取 `sample_submission.csv`，锁定 row ID 和类别列顺序。
+2. 将每个 row ID 解析为 soundscape ID 和结束时间戳。
+3. 每条 soundscape 只读取一次，并在多个时间窗之间复用。
+4. 为每一行截取目标五秒音频片段。
+5. 将音频片段转换为归一化 mel-spectrogram。
+6. 使用 ensemble manifest 时，对多个成员模型的预测取平均。
+7. 按竞赛提交格式写出概率结果。
+
+生成的 Notebook 使用 `/kaggle/input/birdclef-2026` 读取官方数据，并通过单独的 Kaggle Dataset 加载模型权重。提交推理不依赖联网下载，也不要求 GPU。
+
+## 仓库内容
+
+| 路径 | 内容 |
+| --- | --- |
+| `src/audio.py` | 音频读取、波形分段和 mel-spectrogram 特征。 |
+| `src/data.py` | 元数据读取、类别提取、row ID 解析和 fold 划分。 |
+| `src/train.py` | 基线 fold 训练和 checkpoint 导出。 |
+| `src/infer.py` | 基于单 checkpoint 或 ensemble manifest 的提交推理。 |
+| `src/make_notebook.py` | Kaggle CPU Notebook 生成。 |
+| `tests/` | 核心竞赛契约的回归测试。 |
+| `notebooks/` | 生成的推理 Notebook 产物。 |
+
+## 复现命令
+
+创建 Conda 环境：
 
 ```bash
 conda env create -f environment.yml
 conda activate kaggle-birdclef-2026
 ```
 
-Pip 环境：
+使用 pip 安装依赖：
 
 ```bash
 python -m pip install -r requirements.txt
 ```
 
-环境依赖包含 Python 数据处理工具、PyTorch、torchaudio、timm、librosa、onnxruntime、Kaggle API 客户端和 pytest。
-
-## 数据准备
-
-Kaggle API 下载：
+通过 Kaggle API 下载竞赛数据：
 
 ```bash
 python -m src.download_data --competition birdclef-2026
 ```
-
-手动准备数据时，官方竞赛文件应解压到 `data/raw/`。本地目录至少包含：
-
-- `train.csv`
-- `taxonomy.csv`
-- `sample_submission.csv`
-- `recording_location.txt`
-- `train_audio/`
-
-可选的 `test_soundscapes/` 目录用于本地推理 smoke test。Kaggle 正式提交使用竞赛运行环境提供的隐藏测试音景。
-
-## 常用流程
 
 生成数据概览：
 
@@ -60,74 +78,49 @@ python -m src.download_data --competition birdclef-2026
 python -m src.eda --data-dir data/raw
 ```
 
-运行小规模调试训练：
+运行调试训练：
 
 ```bash
 python -m src.train --debug --epochs 1 --limit 256
 ```
 
-运行基线训练流程：
+训练基线模型：
 
 ```bash
 python -m src.train --model efficientnet_b0 --folds 5 --epochs 10
 ```
 
-生成本地提交文件：
+生成提交文件：
 
 ```bash
 python -m src.infer --checkpoint models/baseline.pt --output submissions/submission.csv
 ```
 
-生成 Kaggle CPU 推理 Notebook：
+生成 Kaggle CPU Notebook：
 
 ```bash
 python -m src.make_notebook --checkpoint models/baseline.pt
 ```
 
-生成的 Notebook 从 `/kaggle/input/birdclef-2026` 读取官方数据，从单独的 Kaggle Dataset 加载模型权重，并写出 `/kaggle/working/submission.csv`。提交 Notebook 不依赖联网下载，也不要求 GPU 推理。
-
-## 基线配置
-
-| 配置项 | 默认值 |
-| --- | --- |
-| 采样率 | 32000 Hz |
-| 音频片段长度 | 5 秒 |
-| Mel bins | 128 |
-| FFT size | 2048 |
-| Hop length | 512 |
-| 模型 | EfficientNet-B0 多标签分类头 |
-| 损失函数 | `BCEWithLogitsLoss` |
-| Fold 数量 | 5 |
-| 推理输出 | 按 `sample_submission.csv` 列顺序排列的 sigmoid 概率 |
-
-训练命令会写出 fold checkpoint、`models/baseline.pt` ensemble manifest，以及 `models/baseline_metrics.json` 指标摘要。`model-dataset-metadata.json` 提供默认 Kaggle Dataset 元数据模板，用于模型权重上传。
-
-## 测试
-
-运行回归测试：
+运行测试：
 
 ```bash
 python -m pytest
 ```
 
-测试覆盖音频 crop/pad 行为、元数据解析、指标计算、提交文件形状和列顺序约束。
+## 基线配置
 
-## Git 策略
-
-仓库默认不纳入以下内容：
-
-- Kaggle 官方竞赛数据
-- 模型 checkpoint 和中间训练产物
-- 生成的提交文件
-- 日志和临时输出
-- 下载或复现的公开 Kaggle Kernel
-- 大型生成二进制文件
-
-该策略保持公开仓库轻量，同时保留可复现的源码流程。
-
-## English Documentation
-
-English documentation is available in [`README.md`](README.md).
+| 配置项 | 数值 |
+| --- | --- |
+| 采样率 | 32000 Hz |
+| 窗口长度 | 5 秒 |
+| Mel bins | 128 |
+| FFT size | 2048 |
+| Hop length | 512 |
+| 模型 | EfficientNet-B0 多标签分类器 |
+| 损失函数 | `BCEWithLogitsLoss` |
+| Fold 数量 | 5 |
+| 输出 | 按 `sample_submission.csv` 对齐的 sigmoid 概率 |
 
 ## License
 

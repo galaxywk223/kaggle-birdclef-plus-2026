@@ -1,58 +1,76 @@
 # BirdCLEF Plus 2026
 
-BirdCLEF Plus 2026 is a Kaggle bioacoustic multilabel recognition project. The repository packages a reproducible local training workflow, a CPU-compatible Kaggle inference notebook, and regression tests for the core data and submission logic.
+BirdCLEF Plus 2026 is an acoustic species recognition project for the Kaggle BirdCLEF+ 2026 competition. The system turns long-field audio into multilabel species predictions and packages the full path from training code to a CPU-compatible Kaggle submission notebook.
 
-The project keeps competition data, model weights, generated submissions, downloaded public kernels, and local run outputs outside Git. The tracked surface is intended for public review and portfolio presentation.
+The project focuses on a practical competition setting: fixed audio windows, mel-spectrogram features, multilabel classification, fold-based checkpointing, ensemble inference, and strict submission-column alignment.
 
-## Project Structure
+## Highlights
 
-| Path | Purpose |
+- End-to-end Python pipeline for BirdCLEF+ 2026 audio classification.
+- Mel-spectrogram preprocessing with deterministic crop and padding behavior.
+- EfficientNet-B0 multilabel baseline with a compact CNN fallback.
+- Fold checkpoint export and ensemble manifest support.
+- Kaggle CPU notebook generator for offline submission inference.
+- Regression tests for audio windows, metadata parsing, macro AUC, and submission shape.
+
+## System Design
+
+| Stage | Implementation |
 | --- | --- |
-| `src/` | Audio loading, feature extraction, metadata handling, training, inference, and notebook generation modules. |
-| `tests/` | Regression tests for audio segmentation, data parsing, metric calculation, and submission formatting. |
-| `notebooks/` | Generated Kaggle CPU inference notebook. |
-| `data/raw/` | Local Kaggle competition data directory. Raw files are ignored except for the directory README. |
-| `models/` | Local model checkpoints and Kaggle Dataset upload payloads. Model artifacts are ignored. |
-| `submissions/` | Local `submission.csv` outputs. Submission files are ignored. |
-| `logs/` | Local training, inference, and automation logs. Log files are ignored. |
-| `archive/` | Historical competition-operation notes or scripts that are not part of the main reusable pipeline. |
+| Data loading | Competition metadata, taxonomy labels, sample submission columns, and soundscape row IDs. |
+| Audio preprocessing | 32000 Hz waveform loading, five-second window extraction, and mel-spectrogram conversion. |
+| Training | Fold assignment, multilabel targets, PyTorch dataloaders, EfficientNet-style image classifier, and BCE loss. |
+| Validation | Macro AUC calculation across label columns. |
+| Checkpointing | Per-fold weights plus an ensemble manifest with audio configuration and class order. |
+| Inference | Soundscape segmentation, batch prediction, sigmoid probabilities, and column-order validation. |
+| Submission packaging | Generated Kaggle notebook that reads competition input and writes `submission.csv`. |
 
-## Environment
+## Inference Pipeline
 
-Conda environment:
+The inference flow is designed for Kaggle's CPU runtime:
+
+1. Read `sample_submission.csv` to lock row IDs and class column order.
+2. Parse each row ID into a soundscape ID and an end timestamp.
+3. Load each soundscape once and reuse it across time windows.
+4. Extract the target five-second segment for each row.
+5. Convert each segment into a normalized mel-spectrogram.
+6. Average predictions across ensemble members when a manifest checkpoint is used.
+7. Write probabilities in the exact competition submission format.
+
+The generated notebook uses `/kaggle/input/birdclef-2026` for official data and a separate Kaggle Dataset for model weights. Network access and GPU inference are not required.
+
+## Repository Contents
+
+| Path | Contents |
+| --- | --- |
+| `src/audio.py` | Audio loading, waveform segmentation, and mel-spectrogram features. |
+| `src/data.py` | Metadata loading, class extraction, row ID parsing, and fold assignment. |
+| `src/train.py` | Baseline fold training and checkpoint export. |
+| `src/infer.py` | Submission inference from a single checkpoint or ensemble manifest. |
+| `src/make_notebook.py` | Kaggle CPU notebook generation. |
+| `tests/` | Focused regression tests for the core competition contract. |
+| `notebooks/` | Generated inference notebook artifact. |
+
+## Reproduction
+
+Create the Conda environment:
 
 ```bash
 conda env create -f environment.yml
 conda activate kaggle-birdclef-2026
 ```
 
-Pip environment:
+Install with pip:
 
 ```bash
 python -m pip install -r requirements.txt
 ```
 
-The declared environment includes Python data tooling, PyTorch, torchaudio, timm, librosa, onnxruntime, the Kaggle API client, and pytest.
-
-## Data Preparation
-
-Kaggle API download:
+Download competition data through the Kaggle API:
 
 ```bash
 python -m src.download_data --competition birdclef-2026
 ```
-
-Manual data preparation requires the official competition files to be extracted under `data/raw/`. The required local files are:
-
-- `train.csv`
-- `taxonomy.csv`
-- `sample_submission.csv`
-- `recording_location.txt`
-- `train_audio/`
-
-The optional `test_soundscapes/` directory supports local inference smoke tests. Kaggle submissions use the hidden test soundscapes provided by the competition runtime.
-
-## Workflow
 
 Generate an exploratory data summary:
 
@@ -60,74 +78,49 @@ Generate an exploratory data summary:
 python -m src.eda --data-dir data/raw
 ```
 
-Run a small debug training job:
+Run a debug training job:
 
 ```bash
 python -m src.train --debug --epochs 1 --limit 256
 ```
 
-Run the baseline training workflow:
+Train the baseline model:
 
 ```bash
 python -m src.train --model efficientnet_b0 --folds 5 --epochs 10
 ```
 
-Generate a local submission file:
+Create a submission file:
 
 ```bash
 python -m src.infer --checkpoint models/baseline.pt --output submissions/submission.csv
 ```
 
-Generate the Kaggle CPU inference notebook:
+Generate the Kaggle CPU notebook:
 
 ```bash
 python -m src.make_notebook --checkpoint models/baseline.pt
 ```
 
-The generated notebook reads official data from `/kaggle/input/birdclef-2026`, loads weights from a separate Kaggle Dataset, and writes `/kaggle/working/submission.csv`. Network access and GPU inference are not required by the generated submission notebook.
-
-## Baseline Configuration
-
-| Setting | Default |
-| --- | --- |
-| Sample rate | 32000 Hz |
-| Clip duration | 5 seconds |
-| Mel bins | 128 |
-| FFT size | 2048 |
-| Hop length | 512 |
-| Model | EfficientNet-B0 multilabel head |
-| Loss | `BCEWithLogitsLoss` |
-| Fold count | 5 |
-| Inference output | Sigmoid probabilities in `sample_submission.csv` column order |
-
-The training command writes fold checkpoints, an ensemble manifest at `models/baseline.pt`, and summary metrics at `models/baseline_metrics.json`. The `model-dataset-metadata.json` file provides a default Kaggle Dataset metadata template for model-weight uploads.
-
-## Testing
-
-Run the regression suite:
+Run the test suite:
 
 ```bash
 python -m pytest
 ```
 
-The tests cover audio crop/pad behavior, metadata parsing, metric calculation, and submission shape/order guarantees.
+## Baseline Configuration
 
-## Git Policy
-
-The repository intentionally excludes:
-
-- Official Kaggle competition data
-- Model checkpoints and intermediate training artifacts
-- Generated submissions
-- Logs and temporary outputs
-- Downloaded or replayed public Kaggle kernels
-- Large generated binary files
-
-This policy keeps the public repository lightweight while preserving the reproducible source workflow.
-
-## Chinese Documentation
-
-Chinese documentation is available in [`README.zh-CN.md`](README.zh-CN.md).
+| Setting | Value |
+| --- | --- |
+| Sample rate | 32000 Hz |
+| Window length | 5 seconds |
+| Mel bins | 128 |
+| FFT size | 2048 |
+| Hop length | 512 |
+| Model | EfficientNet-B0 multilabel classifier |
+| Loss | `BCEWithLogitsLoss` |
+| Folds | 5 |
+| Output | Sigmoid probabilities aligned to `sample_submission.csv` |
 
 ## License
 
