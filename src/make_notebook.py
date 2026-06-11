@@ -216,7 +216,7 @@ submission.head()
                 "source": [
                     "# BirdCLEF+ 2026 CPU Inference\n",
                     "\n",
-                    "该 Notebook 使用已训练权重生成 `submission.csv`。\n",
+                    "This notebook generates `submission.csv` from trained checkpoint weights.\n",
                 ],
             },
             {

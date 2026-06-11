@@ -1,8 +1,8 @@
-# BirdCLEF+ 2026 Raw Data
+# BirdCLEF+ 2026 Data Files
 
-本目录存放 Kaggle 官方竞赛数据。原始数据不纳入 Git 版本控制。
+This directory contains local Kaggle competition data used by training, inference, and smoke-test commands.
 
-## 必需文件
+Required files:
 
 - `train.csv`
 - `taxonomy.csv`
@@ -10,9 +10,8 @@
 - `recording_location.txt`
 - `train_audio/`
 
-## 可选文件
+Optional files:
 
 - `test_soundscapes/`
 
-Kaggle 正式提交环境会提供隐藏测试音景。本地 smoke test 可使用少量训练音频复制或软链接到 `test_soundscapes/`。
-
+Kaggle code submissions provide hidden test soundscapes in the competition runtime. Local smoke tests can use a small copied or linked subset under `test_soundscapes/`.
